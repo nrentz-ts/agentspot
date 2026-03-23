@@ -6,6 +6,7 @@ import { Activity, ArrowUpRight } from "lucide-react";
 import { ALL_HELPERS, toSlug } from "@/lib/helper-detail-data";
 import type { ResolutionColor } from "@/lib/helper-detail-data";
 import { cn } from "@/lib/utils";
+import { WorkUpdates } from "@/components/dashboard/work-updates";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -198,7 +199,7 @@ export default function ActivityPage() {
           <div>
             <h1 className="text-xl font-bold tracking-tight">Activity</h1>
             <p className="text-[13px] text-muted-foreground">
-              Everything your helpers have done, in one feed
+              Everything your agents have done, in one feed
             </p>
           </div>
         </div>
@@ -208,6 +209,11 @@ export default function ActivityPage() {
           <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
           <span className="text-[12px] font-medium text-emerald-700">Live</span>
         </div>
+      </div>
+
+      {/* Things that need your attention */}
+      <div className="mt-8 mx-auto max-w-3xl">
+        <WorkUpdates />
       </div>
 
       {/* Filter tabs */}

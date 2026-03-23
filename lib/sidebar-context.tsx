@@ -13,7 +13,7 @@ const SidebarContext = createContext<SidebarContextValue>({
 });
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   return (
     <SidebarContext.Provider value={{ open, toggle: () => setOpen((v) => !v) }}>

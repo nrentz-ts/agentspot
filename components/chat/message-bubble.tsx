@@ -45,7 +45,7 @@ export function MessageBubble({ message, onConfirm, onCancel }: MessageBubblePro
             return (
               <div
                 key={i}
-                className="rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-[14px] leading-relaxed text-primary-foreground"
+                className="rounded-2xl rounded-tr-sm bg-muted/70 px-4 py-2.5 text-[14px] leading-relaxed text-foreground"
               >
                 {block.text}
               </div>

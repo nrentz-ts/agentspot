@@ -23,7 +23,7 @@ function Navbar() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Sparkles className="h-4 w-4 text-white" />
           </div>
-          <span className="text-[17px] font-bold tracking-tight">SpotterWork</span>
+          <span className="text-[17px] font-bold tracking-tight">AgentSpot</span>
         </div>
         <div className="hidden items-center gap-8 md:flex">
           <a href="#features" className="text-[14px] text-muted-foreground transition-colors hover:text-foreground">Features</a>
@@ -56,12 +56,12 @@ function Hero() {
           Your work is chaos.
           <br />
           <span className="bg-gradient-to-r from-primary to-indigo-400 bg-clip-text text-transparent">
-            SpotterWork is the calm.
+            AgentSpot is the calm.
           </span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
           The busywork, the follow-ups, the repetitive tasks that drain your day —
-          SpotterWork takes them off your plate. Create agents, build workflows, and
+          AgentSpot takes them off your plate. Create agents, build workflows, and
           reclaim your focus through simple conversation.
         </p>
         <div className="mt-10 flex items-center justify-center gap-4">
@@ -90,7 +90,7 @@ const FEATURES = [
   {
     icon: MessageCircle,
     title: "Just talk to it",
-    description: "No manuals, no training. Tell SpotterWork what's overwhelming you and it gets to work — like handing tasks to a trusted teammate.",
+    description: "No manuals, no training. Tell AgentSpot what's overwhelming you and it gets to work — like handing tasks to a trusted teammate.",
   },
   {
     icon: Bot,
@@ -105,7 +105,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "Instant relief",
-    description: "Describe a task that's been eating your time and SpotterWork builds the automation in seconds. That backlog of busywork? Gone.",
+    description: "Describe a task that's been eating your time and AgentSpot builds the automation in seconds. That backlog of busywork? Gone.",
   },
   {
     icon: Shield,
@@ -128,7 +128,7 @@ function Features() {
             Less noise. More focus.
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground">
-            Every feature in SpotterWork is designed to take something off your plate — so you can focus on work that actually matters.
+            Every feature in AgentSpot is designed to take something off your plate — so you can focus on work that actually matters.
           </p>
         </div>
         <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -155,12 +155,12 @@ function Features() {
 const STEPS = [
   {
     step: "1",
-    title: "Tell SpotterWork what's draining your day",
+    title: "Tell AgentSpot what's draining your day",
     description: "Describe the task, process, or headache in your own words. No jargon, no setup — just say what you need.",
   },
   {
     step: "2",
-    title: "SpotterWork creates an agent or workflow",
+    title: "AgentSpot creates an agent or workflow",
     description: "It understands what you're dealing with and builds the right solution — an always-on agent or a step-by-step workflow — ready for you to review.",
   },
   {
@@ -179,7 +179,7 @@ function HowItWorks() {
             From overwhelmed to automated in minutes
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground">
-            No technical skills required. If you can describe what&apos;s stressing you out, SpotterWork can take it off your hands.
+            No technical skills required. If you can describe what&apos;s stressing you out, AgentSpot can take it off your hands.
           </p>
         </div>
         <div className="mt-16 space-y-8">
@@ -218,7 +218,7 @@ function UseCases() {
             Every team deserves peace
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground">
-            No matter your role, the chaos looks different but feels the same. Here&apos;s how teams are finding their calm with SpotterWork.
+            No matter your role, the chaos looks different but feels the same. Here&apos;s how teams are finding their calm with AgentSpot.
           </p>
         </div>
         <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -243,19 +243,19 @@ function UseCases() {
 
 const TESTIMONIALS = [
   {
-    quote: "Our HR team used to dread Monday mornings — onboarding docs, PTO approvals, compliance reminders piling up. Now SpotterWork agents handle all of it. We actually have time to focus on our people.",
+    quote: "Our HR team used to dread Monday mornings — onboarding docs, PTO approvals, compliance reminders piling up. Now AgentSpot agents handle all of it. We actually have time to focus on our people.",
     name: "Priya Sharma",
     role: "Head of People Ops",
     company: "Notion",
   },
   {
-    quote: "I told my team to try SpotterWork for a week. Within a day, they'd built follow-up agents and pipeline workflows on their own. No training, no IT tickets. Just calm.",
+    quote: "I told my team to try AgentSpot for a week. Within a day, they'd built follow-up agents and pipeline workflows on their own. No training, no IT tickets. Just calm.",
     name: "Marcus Johnson",
     role: "VP of Sales",
     company: "Stripe",
   },
   {
-    quote: "Month-end used to be pure chaos — chasing invoices, reconciling reports, approving expenses. We set up three workflows in SpotterWork and got 60 hours back. It's a different team now.",
+    quote: "Month-end used to be pure chaos — chasing invoices, reconciling reports, approving expenses. We set up three workflows in AgentSpot and got 60 hours back. It's a different team now.",
     name: "Lisa Chen",
     role: "CFO",
     company: "Figma",
@@ -299,7 +299,7 @@ function CTA() {
           Your workspace doesn&apos;t have to be chaotic
         </h2>
         <p className="mx-auto mt-4 max-w-lg text-base text-white/80">
-          Let SpotterWork handle the noise — the follow-ups, the approvals, the repetitive tasks.
+          Let AgentSpot handle the noise — the follow-ups, the approvals, the repetitive tasks.
           You focus on the work that gives you energy.
         </p>
         <div className="mt-8 flex items-center justify-center gap-4">
@@ -323,10 +323,10 @@ function Footer() {
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
             <Sparkles className="h-3.5 w-3.5 text-white" />
           </div>
-          <span className="text-[14px] font-semibold">SpotterWork</span>
+          <span className="text-[14px] font-semibold">AgentSpot</span>
         </div>
         <p className="text-[13px] text-muted-foreground">
-          &copy; 2026 SpotterWork. All rights reserved.
+          &copy; 2026 AgentSpot. All rights reserved.
         </p>
       </div>
     </footer>

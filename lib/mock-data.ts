@@ -3,7 +3,7 @@ import { RichContent } from "./types";
 export const WELCOME_MESSAGE: RichContent[] = [
   {
     type: "text",
-    text: "Hi there! I'm SpotterWork, your personal work assistant. I can help you automate repetitive tasks, manage workflows, and get things done faster. What would you like help with today?",
+    text: "Hi there! I'm AgentSpot, your personal work assistant. I can help you automate repetitive tasks, manage workflows, and get things done faster. What would you like help with today?",
   },
 ];
 

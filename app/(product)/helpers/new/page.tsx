@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -9,10 +9,27 @@ import {
   Check,
   Search,
   ChevronRight,
+  ChevronDown,
+  Users,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { generateId } from "@/lib/mock-engine";
 import { getHelperDetail } from "@/lib/helper-detail-data";
+import { RunGraph } from "@/components/run-graph";
+import { CommunityModal } from "@/components/community-modal";
+import { useVariant } from "@/lib/variant-context";
+import { COMMUNITY_HELPERS } from "@/lib/community-helpers";
+
+// ─── Template previews (3 featured) ────────────────────────────────────────
+
+const TEMPLATE_PREVIEWS = [
+  COMMUNITY_HELPERS[0],   // Culture Pulse  — HR
+  COMMUNITY_HELPERS[8],   // Influencer Finder — Marketing
+  COMMUNITY_HELPERS[22],  // Cold Outreach Writer — Sales
+];
+
+type TemplateDef = typeof TEMPLATE_PREVIEWS[0];
 
 // ─── Connectors ────────────────────────────────────────────────────────────
 
@@ -58,7 +75,87 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  type?: "template-picker" | "template-reasoning";
   filledFields?: string[];
+  templateData?: TemplateDef;
+}
+
+// ─── Template form data derivation ─────────────────────────────────────────
+
+const TEMPLATE_SKILLS: Record<string, string[]> = {
+  "culture pulse": [
+    "• Send anonymous weekly pulse surveys to all employees via Slack and email every Monday at 9 AM",
+    "• Collect quantitative sentiment scores (1–10) and open-ended qualitative responses across all teams",
+    "• Generate trend reports comparing this week's scores vs the previous 4 weeks, segmented by department",
+    "• Flag any team with a sentiment drop greater than 10 points week-over-week and create an alert for the HR manager",
+    "• Surface the top 3 recurring themes from open-ended responses using AI text analysis",
+    "• Summarize key themes, notable verbatim quotes, and action items in a weekly digest sent to HR leadership",
+    "• Maintain a rolling 12-week trend dashboard in Notion, automatically updated after each survey cycle",
+    "• Never expose individual responses — all outputs are anonymized and aggregated at the team level",
+    "• Escalate to HR manager if participation rate drops below 60% for two consecutive weeks",
+    "• On the first Monday of each month, generate a full cross-functional sentiment report for the leadership team",
+  ],
+  "influencer finder": [
+    "• Search across Instagram, LinkedIn, TikTok, and YouTube for influencers matching the target niche, audience size, and geography",
+    "• Score each influencer on a 0–100 scale using: engagement rate (40%), audience brand fit (30%), content consistency (20%), past partnership history (10%)",
+    "• Filter out accounts with fake follower indicators, bot engagement patterns, or brand safety violations in the past 90 days",
+    "• Compile a ranked shortlist of top 10 influencers with contact details, media kits, estimated rates, and last 3 posts for review",
+    "• Cross-reference shortlisted influencers against competitor brand deals to avoid conflicts of interest",
+    "• Draft an initial outreach email for each shortlisted influencer, personalized with their recent content and audience insights",
+    "• Track partnership status across stages: Identified → Contacted → Negotiating → Contracted → Live → Reported",
+    "• Log all outreach attempts, responses, and follow-ups in Notion with timestamps and next-action reminders",
+    "• Generate a post-campaign performance report comparing estimated vs actual reach, engagement, and conversion attribution",
+    "• Escalate to the brand manager if a shortlisted influencer has posted controversial content in the last 30 days",
+  ],
+  "cold outreach writer": [
+    "• Research each prospect's LinkedIn profile, company website, recent news mentions, and G2 reviews before drafting",
+    "• Identify the prospect's likely pain points based on their industry, company size, tech stack, and recent hiring signals",
+    "• Personalize every email using at least 3 prospect-specific details — generic outreach should never be sent",
+    "• Write a 3-step email sequence: (1) value-led intro, (2) case study or social proof, (3) low-commitment CTA",
+    "• A/B test 2 subject line variants per campaign; automatically route traffic 50/50 and declare winner after 50 opens",
+    "• Track open rates, click rates, reply rates, and positive response rates per campaign segment",
+    "• Update the CRM with all engagement events (open, click, reply, unsubscribe) within 5 minutes of occurrence",
+    "• Auto-send a softer follow-up after 3 business days of no response; archive the thread if still no reply after 7 days",
+    "• Never send more than 1 email per day to the same prospect; respect unsubscribe and opt-out signals immediately",
+    "• Flag any email with a spam score above 3.0 (SpamAssassin) for human review before sending",
+    "• Generate a weekly outreach performance digest showing reply rates, top-performing subject lines, and pipeline created",
+  ],
+};
+
+const TEMPLATE_CONNECTORS: Record<string, string[]> = {
+  "culture pulse":        ["slack", "gcal", "notion"],
+  "influencer finder":    ["notion", "drive", "gmail"],
+  "cold outreach writer": ["gmail", "salesforce", "hubspot", "linkedin"],
+};
+
+function getTemplateFormData(template: TemplateDef): { name: string; description: string; instructions: string; connectors: string[] } {
+  const key = template.name.toLowerCase();
+  const skills = TEMPLATE_SKILLS[key] ?? [
+    `• ${template.description}`,
+    "• Run autonomously on a defined schedule or trigger",
+    "• Log all actions taken for audit and review",
+    "• Escalate to user when confidence is below threshold",
+    "• Send a daily summary digest of completed tasks",
+  ];
+  return {
+    name: template.name,
+    description: template.description,
+    instructions: skills.join("\n"),
+    connectors: TEMPLATE_CONNECTORS[key] ?? ["slack", "gmail"],
+  };
+}
+
+// ─── Reasoning steps per template ──────────────────────────────────────────
+
+function getReasoningSteps(template: TemplateDef): string[] {
+  return [
+    `Reading "${template.name}" template`,
+    "Setting the name",
+    "Writing the description",
+    "Building the skill list",
+    "Selecting connectors",
+    "Ready — review and customize!",
+  ];
 }
 
 // ─── Form field extractor ──────────────────────────────────────────────────
@@ -115,7 +212,7 @@ function extractUpdates(msg: string, form: HelperForm): Partial<Omit<HelperForm,
 
 // ─── AI response generator ─────────────────────────────────────────────────
 
-function buildAIResponse(updates: ReturnType<typeof extractUpdates>, isFirst: boolean): string {
+function buildAIResponse(updates: ReturnType<typeof extractUpdates>, isFirst: boolean, entityLabel: string): string {
   const filled: string[] = [];
   if (updates.name)                filled.push(`named it **${updates.name}**`);
   if (updates.description)         filled.push("filled the description");
@@ -123,12 +220,12 @@ function buildAIResponse(updates: ReturnType<typeof extractUpdates>, isFirst: bo
   if (updates.connectors?.length)  filled.push(`connected ${updates.connectors.join(", ")}`);
 
   if (isFirst && filled.length === 0) {
-    return "I'd love to help you build this helper! Tell me — what should it do? Describe its main job and I'll start filling in the form for you.";
+    return `I'd love to help you build this ${entityLabel.toLowerCase()}! Tell me — what should it do? Describe its main job and I'll start filling in the form for you.`;
   }
 
   const acks = [
     filled.length > 0 ? `Got it — I've ${filled.join(", ")}. ` : "Noted. ",
-    "What else should this helper be able to do? ",
+    `What else should this ${entityLabel.toLowerCase()} be able to do? `,
     "You can also mention any apps it should connect to (Slack, Gmail, Jira…), or describe edge cases it should handle.",
   ];
 
@@ -137,7 +234,7 @@ function buildAIResponse(updates: ReturnType<typeof extractUpdates>, isFirst: bo
     "Any tone or communication style it should follow?",
     "Should it ever ask you before taking action, or run fully autonomously?",
     "Are there things it should explicitly *not* do?",
-    "What would a perfect response from this helper look like?",
+    "What would a perfect response from this look like?",
   ];
 
   return acks.join("") + "\n\n" + followUps[Math.floor(Math.random() * followUps.length)];
@@ -160,15 +257,142 @@ function TypingDots() {
   );
 }
 
+// ─── Template reasoning message ────────────────────────────────────────────
+
+function TemplateReasoningMessage({ template }: { template: TemplateDef }) {
+  const steps = getReasoningSteps(template);
+  const [completedCount, setCompletedCount] = useState(0);
+
+  useEffect(() => {
+    // Each step completes on the same schedule as the form fill
+    // step 0 (reading) → instant, step 1–4 → 400, 1200, 2000, 2800ms, step 5 → 3400ms
+    const delays = [150, 600, 1400, 2200, 3000, 3600];
+    const timers = delays.map((d, i) =>
+      setTimeout(() => setCompletedCount(i + 1), d)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const currentStep = completedCount < steps.length ? completedCount : -1;
+
+  return (
+    <div className="rounded-2xl rounded-tl-sm bg-white shadow-sm px-4 py-3.5 max-w-[92%]">
+      <div className="flex items-center gap-2 mb-3">
+        <div className={cn("flex h-7 w-7 items-center justify-center rounded-lg text-[15px]", template.color)}>
+          {template.emoji}
+        </div>
+        <p className="text-[13px] font-semibold text-foreground">
+          Setting up <span className="text-primary">{template.name}</span>
+        </p>
+      </div>
+      <div className="space-y-2">
+        {steps.map((step, i) => {
+          const done    = i < completedCount;
+          const active  = i === currentStep;
+          const pending = !done && !active;
+          return (
+            <div
+              key={i}
+              className={cn(
+                "flex items-center gap-2.5 text-[13px] transition-all duration-300",
+                done    ? "text-foreground"           : "",
+                active  ? "text-primary"              : "",
+                pending ? "text-muted-foreground/30"  : ""
+              )}
+            >
+              {done ? (
+                <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                  <Check className="h-2.5 w-2.5 text-emerald-600" />
+                </div>
+              ) : active ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+              ) : (
+                <div className="h-4 w-4 shrink-0 rounded-full border border-border/50" />
+              )}
+              <span className={cn(done && i === steps.length - 1 && "font-semibold text-emerald-700")}>
+                {step}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Template picker card ──────────────────────────────────────────────────
+
+function TemplatePickerMessage({
+  onViewAll,
+  onSelect,
+  entityLabel,
+}: {
+  onViewAll: () => void;
+  onSelect: (t: TemplateDef) => void;
+  entityLabel: string;
+}) {
+  return (
+    <div className="rounded-2xl rounded-tl-sm bg-white shadow-sm px-4 py-3.5 max-w-[92%]">
+      <p className="text-[14px] font-medium text-foreground mb-3">
+        Or, start from a template — here are a few popular ones:
+      </p>
+      <div className="space-y-2">
+        {TEMPLATE_PREVIEWS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => onSelect(t)}
+            className="flex w-full items-center gap-3 rounded-xl border border-border bg-white/80 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-sm active:scale-[0.98]"
+          >
+            <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[16px]", t.color)}>
+              {t.emoji}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-foreground">{t.name}</p>
+              <p className="text-[11px] text-muted-foreground line-clamp-1">{t.description}</p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0 text-[10px] text-muted-foreground/50">
+              <Users className="h-3 w-3" />
+              {t.installs.toLocaleString()}
+            </div>
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={onViewAll}
+        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 py-2 text-[13px] font-medium text-primary transition-colors hover:border-primary/50 hover:bg-primary/[0.03]"
+      >
+        View all {entityLabel.toLowerCase()} templates
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 // ─── Field highlight wrapper ───────────────────────────────────────────────
 
-function FieldWrap({ label, highlighted, children }: { label: string; highlighted: boolean; children: React.ReactNode }) {
+function FieldWrap({
+  label,
+  highlighted,
+  children,
+  fieldRef,
+}: {
+  label: string;
+  highlighted: boolean;
+  children: React.ReactNode;
+  fieldRef?: React.RefObject<HTMLDivElement | null>;
+}) {
   return (
-    <div className={cn("rounded-xl border p-4 transition-all duration-500", highlighted ? "border-primary/40 bg-primary/[0.03] shadow-sm" : "border-border bg-white")}>
+    <div
+      ref={fieldRef}
+      className={cn(
+        "rounded-xl border p-4 transition-all duration-500",
+        highlighted ? "border-primary/40 bg-primary/[0.03] shadow-sm ring-1 ring-primary/10" : "border-border bg-white"
+      )}
+    >
       <div className="mb-2.5 flex items-center justify-between">
-        <label className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground/70">{label}</label>
+        <label className="text-[14px] font-semibold text-muted-foreground/70">{label}</label>
         {highlighted && (
-          <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+          <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold text-primary">
             <Sparkles className="h-2.5 w-2.5" /> AI filled
           </span>
         )}
@@ -183,37 +407,166 @@ function FieldWrap({ label, highlighted, children }: { label: string; highlighte
 function NewHelperContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { variant } = useVariant();
+  const entityLabel = variant.agentLabel;
+  const entityLabelPlural = variant.agentsLabel;
   const fromSlug = searchParams.get("from");
   const isEditing = !!fromSlug;
 
   const existingHelper = useMemo(() => fromSlug ? getHelperDetail(fromSlug) : null, [fromSlug]);
 
+  const editConnectors = useMemo((): Set<string> => {
+    if (!isEditing || !existingHelper) return new Set();
+    const n = existingHelper.name.toLowerCase();
+    if (n.includes("resume") || n.includes("screen") || n.includes("candidate") || n.includes("offer"))
+      return new Set(["gmail", "gcal", "drive"]);
+    if (n.includes("pipeline") || n.includes("lead") || n.includes("crm") || n.includes("sales") || n.includes("follow"))
+      return new Set(["salesforce", "gmail", "slack"]);
+    if (n.includes("onboard") || n.includes("pto") || n.includes("benefits") || n.includes("hr"))
+      return new Set(["gmail", "slack", "gcal", "notion"]);
+    if (n.includes("interview") || n.includes("schedule") || n.includes("calendar") || n.includes("meeting"))
+      return new Set(["gcal", "gmail", "zoom"]);
+    if (n.includes("content") || n.includes("blog") || n.includes("social") || n.includes("email"))
+      return new Set(["notion", "drive", "slack"]);
+    if (n.includes("code") || n.includes("pr") || n.includes("deploy") || n.includes("bug"))
+      return new Set(["github", "atlassian", "slack"]);
+    return new Set(["gmail", "slack"]);
+  }, [isEditing, existingHelper]);
+
+  const editInstructions = useMemo((): string => {
+    if (!isEditing || !existingHelper) return "";
+    const n = existingHelper.name.toLowerCase();
+
+    // Rich, contextual instructions based on agent type
+    if (n.includes("pipeline") || n.includes("deal") || n.includes("crm") || n.includes("lead") || n.includes("scorer")) {
+      return [
+        `• ${existingHelper.description}`,
+        "• Score every inbound lead 0–100 using ICP fit criteria: company size, industry, tech stack, and buying signals",
+        "• Enrich lead records with Clearbit, LinkedIn, and recent news data before scoring",
+        "• Auto-route high-intent leads (score ≥ 70) to the assigned rep within 5 minutes of submission",
+        "• Flag leads with missing required fields (email, company, role) and request enrichment before routing",
+        "• Update deal stages in Salesforce automatically after each call transcript is processed via Gong",
+        "• Generate a pipeline health summary every Friday at 4 PM covering: total pipeline, stage distribution, at-risk deals",
+        "• Alert the rep and manager if a deal has had no activity for more than 7 days",
+        "• Produce a weekly Win/Loss analysis identifying the top 3 reasons deals were won or lost that week",
+        "• Never modify CRM records without confirmation if the deal value exceeds $500K",
+        ...existingHelper.gaps.slice(0, 2).map((g) => `• Escalate to user when: ${g.description.toLowerCase()}`),
+      ].join("\n");
+    }
+
+    if (n.includes("resume") || n.includes("screen") || n.includes("candidate") || n.includes("recruit")) {
+      return [
+        `• ${existingHelper.description}`,
+        "• Screen every incoming resume against the active job description using a structured 10-point criteria rubric",
+        "• Score each candidate 0–100 and generate a 3-sentence summary of their fit for the hiring manager",
+        "• Automatically move candidates scoring ≥ 80 to the 'Phone Screen' stage in the ATS",
+        "• Flag candidates who are missing required skills with a clear explanation of which criteria they failed",
+        "• Detect and filter duplicate applications from the same candidate across multiple roles",
+        "• Send a personalized acknowledgement email to every applicant within 2 hours of submission",
+        "• Generate a weekly sourcing funnel report: applications received → screened → shortlisted → interviewed",
+        "• Notify the recruiter if the application volume drops below 10/day for a role that has been open > 14 days",
+        "• Never reject a candidate without logging a specific, policy-compliant reason in the ATS",
+        ...existingHelper.gaps.slice(0, 2).map((g) => `• Escalate to user when: ${g.description.toLowerCase()}`),
+      ].join("\n");
+    }
+
+    if (n.includes("follow") || n.includes("draft") || n.includes("email") || n.includes("outreach")) {
+      return [
+        `• ${existingHelper.description}`,
+        "• Pull call notes from Gong or Zoom within 30 minutes of a demo completing and extract key talking points",
+        "• Draft a personalised follow-up email referencing specific pain points discussed during the call",
+        "• Include a relevant case study or social proof matched to the prospect's industry in every follow-up",
+        "• Propose a concrete next step with a suggested timeframe (e.g., 'book a 30-min technical deep-dive by Friday')",
+        "• Run a tone and factual accuracy check before sending — never send emails with unverified claims",
+        "• Log the sent email in Salesforce and create a follow-up task for the rep if no reply within 48 hours",
+        "• A/B test subject line variants across campaigns and report winning patterns weekly",
+        "• Never use generic openers like 'Hope this finds you well' — every email must reference something specific",
+        "• If the prospect is marked as 'Do Not Contact' in the CRM, halt all outreach immediately and alert the rep",
+        ...existingHelper.gaps.slice(0, 2).map((g) => `• Escalate to user when: ${g.description.toLowerCase()}`),
+      ].join("\n");
+    }
+
+    // Generic fallback — still much richer than before
+    const base = `• ${existingHelper.description}`;
+    const fromActivity = existingHelper.activity
+      .slice(0, 6)
+      .map((a) => `• ${a.action.charAt(0).toUpperCase() + a.action.slice(1)}`)
+      .join("\n");
+    const fromGaps = existingHelper.gaps
+      .slice(0, 3)
+      .map((g) => `• Escalate to user when: ${g.description.toLowerCase()}`)
+      .join("\n");
+    const generic = [
+      "• Run on the defined schedule or event trigger without requiring manual intervention",
+      "• Log every action taken with a timestamp and outcome in the activity feed",
+      "• Generate a daily summary digest of all completed tasks and any anomalies detected",
+      "• Respect all user-defined business rules and escalation thresholds at all times",
+      "• If confidence in the correct action is below 80%, pause and request human confirmation before proceeding",
+    ].join("\n");
+    return [base, fromActivity, fromGaps, generic].join("\n");
+  }, [isEditing, existingHelper]);
+
+  // Pre-select tools for edit mode based on agent name
+  const editTools = useMemo((): Set<string> => {
+    if (!isEditing || !existingHelper) return new Set();
+    const n = existingHelper.name.toLowerCase();
+    if (n.includes("pipeline") || n.includes("lead") || n.includes("deal") || n.includes("scorer"))
+      return new Set(["search", "data", "integrations"]);
+    if (n.includes("resume") || n.includes("screen") || n.includes("candidate"))
+      return new Set(["search", "data", "human"]);
+    if (n.includes("follow") || n.includes("draft") || n.includes("email") || n.includes("outreach"))
+      return new Set(["search", "integrations", "memory"]);
+    if (n.includes("code") || n.includes("pr") || n.includes("deploy") || n.includes("bug"))
+      return new Set(["code", "search", "browser"]);
+    if (n.includes("content") || n.includes("blog") || n.includes("social"))
+      return new Set(["search", "browser", "data"]);
+    return new Set(["search", "data"]);
+  }, [isEditing, existingHelper]);
+
   const [form, setForm] = useState<HelperForm>({
     name: existingHelper?.name ?? "",
     description: existingHelper?.description ?? "",
-    instructions: existingHelper ? `• ${existingHelper.activity.slice(0, 3).map(a => a.action).join("\n• ")}` : "",
-    connectors: new Set<string>(),
-    tools: new Set<string>(),
+    instructions: editInstructions,
+    connectors: editConnectors,
+    tools: editTools,
   });
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const intro: ChatMessage = {
       id: generateId(),
       role: "assistant",
       text: isEditing
         ? `I can see you're editing **${existingHelper?.name}**. What would you like to change? You can describe new capabilities, adjust the description, or add connectors.`
-        : "Let's build your helper together. Tell me what it should do — describe it in plain English and I'll fill in the form as we talk.",
-    },
-  ]);
+        : `Let's build your ${entityLabel.toLowerCase()} together. Tell me what it should do — describe it in plain English and I'll fill in the form as we talk.`,
+    };
+    if (isEditing) return [intro];
+    return [
+      intro,
+      { id: generateId(), role: "assistant", text: "", type: "template-picker" },
+    ];
+  });
+
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const [saved, setSaved] = useState(false);
   const [connectorSearch, setConnectorSearch] = useState("");
+  const [showCommunity, setShowCommunity] = useState(false);
+  const [fillingFromTemplate, setFillingFromTemplate] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isFirstUserMsg = useRef(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const [leftPct, setLeftPct] = useState(50);
+
+  // Field refs for auto-scroll
+  const nameFieldRef    = useRef<HTMLDivElement>(null);
+  const descFieldRef    = useRef<HTMLDivElement>(null);
+  const skillsFieldRef  = useRef<HTMLDivElement>(null);
+  const connFieldRef    = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -225,10 +578,89 @@ function NewHelperContent() {
     return CONNECTOR_OPTIONS.filter((c) => c.name.toLowerCase().includes(q));
   }, [connectorSearch]);
 
+  function flashField(field: string, fieldRef: React.RefObject<HTMLDivElement | null>) {
+    setHighlighted((prev) => new Set([...prev, field]));
+    // scroll right panel to the field
+    fieldRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    setTimeout(() => {
+      setHighlighted((prev) => { const n = new Set(prev); n.delete(field); return n; });
+    }, 2500);
+  }
+
   function flash(fields: string[]) {
     setHighlighted(new Set(fields));
     setTimeout(() => setHighlighted(new Set()), 3000);
   }
+
+  // ─── Template selection handler ─────────────────────────────────────────
+
+  function handleTemplateSelect(template: TemplateDef) {
+    if (fillingFromTemplate) return; // prevent double-click
+    setFillingFromTemplate(true);
+
+    // 1. User message
+    const userMsg: ChatMessage = {
+      id: generateId(),
+      role: "user",
+      text: `Use the ${template.name} template`,
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setTyping(true);
+
+    // 2. Brief typing → show reasoning message
+    setTimeout(() => {
+      setTyping(false);
+      const reasoningMsg: ChatMessage = {
+        id: generateId(),
+        role: "assistant",
+        text: "",
+        type: "template-reasoning",
+        templateData: template,
+      };
+      setMessages((prev) => [...prev, reasoningMsg]);
+
+      const data = getTemplateFormData(template);
+
+      // 3. Fill Name
+      setTimeout(() => {
+        setForm((prev) => ({ ...prev, name: data.name }));
+        flashField("name", nameFieldRef);
+      }, 400);
+
+      // 4. Fill Description
+      setTimeout(() => {
+        setForm((prev) => ({ ...prev, description: data.description }));
+        flashField("description", descFieldRef);
+      }, 1200);
+
+      // 5. Fill Skills
+      setTimeout(() => {
+        setForm((prev) => ({ ...prev, instructions: data.instructions }));
+        flashField("skills", skillsFieldRef);
+      }, 2000);
+
+      // 6. Fill Connectors
+      setTimeout(() => {
+        setForm((prev) => ({ ...prev, connectors: new Set(data.connectors) }));
+        flashField("connectors", connFieldRef);
+      }, 2800);
+
+      // 7. Final wrap-up message
+      setTimeout(() => {
+        const doneMsg: ChatMessage = {
+          id: generateId(),
+          role: "assistant",
+          text: `All set! I've pre-filled the form with the **${template.name}** community template.\n\nFeel free to tweak any field — or just hit "${isEditing ? "Save changes" : `Create ${entityLabel}`}" to launch it right away.`,
+          filledFields: ["name", "description", "skills", "connectors"],
+        };
+        setMessages((prev) => [...prev, doneMsg]);
+        setFillingFromTemplate(false);
+      }, 3800);
+
+    }, 700);
+  }
+
+  // ─── Regular chat send ──────────────────────────────────────────────────
 
   function sendMessage() {
     const text = input.trim();
@@ -244,7 +676,7 @@ function NewHelperContent() {
 
     setTimeout(() => {
       const updates = extractUpdates(text, form);
-      const aiText = buildAIResponse(updates, isFirst);
+      const aiText = buildAIResponse(updates, isFirst, entityLabel);
 
       const fieldsUpdated: string[] = [];
       setForm((prev) => {
@@ -283,235 +715,320 @@ function NewHelperContent() {
     });
   }
 
+  const onDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    function onMouseMove(ev: MouseEvent) {
+      if (!isDragging.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setLeftPct(Math.min(Math.max(pct, 25), 70));
+    }
+    function onMouseUp() {
+      isDragging.current = false;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    }
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, []);
+
   function handleSave() {
     setSaved(true);
+
+    if (!isEditing && form.name) {
+      // Pick emoji/color from community helpers if name matches, else use a fresh default
+      const match = COMMUNITY_HELPERS.find(
+        (h) => h.name.toLowerCase() === form.name.toLowerCase()
+      );
+      const newAgent = {
+        id: `created-${Date.now()}`,
+        name: form.name,
+        description: form.description || `AI ${form.name}`,
+        emoji: match?.emoji ?? "✨",
+        color: match?.color ?? "bg-violet-100",
+      };
+      try {
+        localStorage.setItem("agentspot_new_agent", JSON.stringify(newAgent));
+      } catch { /* ignore */ }
+    }
+
     setTimeout(() => router.push("/helpers"), 1200);
   }
 
+  const modalTitle = variant.id === "helpers" ? "Pick Helper Templates" : "Pick Agent Templates";
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#F8F9FC]">
+    <>
+      {showCommunity && (
+        <CommunityModal onClose={() => setShowCommunity(false)} title={modalTitle} />
+      )}
 
-      {/* ── Top bar ── */}
-      <header className="flex shrink-0 items-center justify-between border-b border-border bg-white px-6 py-3">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {isEditing ? "Back to Helper" : "Back to Helpers"}
-        </button>
+      <div className="flex h-screen flex-col overflow-hidden bg-[#F8F9FC]">
 
-        <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-            <Sparkles className="h-3 w-3 text-primary" />
-          </div>
-          <span className="text-[14px] font-semibold text-foreground">
-            {isEditing ? `Edit · ${existingHelper?.name ?? "Helper"}` : "New Helper"}
-          </span>
-        </div>
+        {/* ── Top bar ── */}
+        <header className="flex shrink-0 items-center justify-between border-b border-border bg-white px-6 py-3">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {isEditing ? `Back to ${entityLabel}` : `Back to ${entityLabelPlural}`}
+          </button>
 
-        <button
-          onClick={handleSave}
-          className={cn(
-            "rounded-lg px-4 py-2 text-[13px] font-semibold transition-all",
-            saved
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-primary text-white hover:opacity-90"
-          )}
-        >
-          {saved ? "Saved ✓" : isEditing ? "Save changes" : "Create helper"}
-        </button>
-      </header>
-
-      {/* ── Split body ── */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* ── LEFT: Chat ── */}
-        <div className="flex w-1/2 shrink-0 flex-col border-r border-border bg-gradient-to-b from-blue-50/70 via-indigo-50/30 to-white/60">
-          <div className="shrink-0 border-b border-border/50 px-5 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-              Build with AI
-            </p>
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+              <Sparkles className="h-3 w-3 text-primary" />
+            </div>
+            <span className="text-[14px] font-semibold text-foreground">
+              {isEditing ? `Edit · ${existingHelper?.name ?? entityLabel}` : `New ${entityLabel}`}
+            </span>
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-            {messages.map((msg) => {
-              const isUser = msg.role === "user";
-              return (
-                <div key={msg.id} className={cn("flex items-start gap-2.5 py-1.5", isUser && "flex-row-reverse")}>
-                  <div className={cn(
-                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-bold",
-                    isUser ? "bg-foreground/8 text-foreground" : "bg-primary/10 text-primary"
-                  )}>
-                    {isUser ? "A" : <Sparkles className="h-3 w-3" />}
-                  </div>
-                  <div className={cn("max-w-[82%]", isUser && "flex flex-col items-end")}>
-                    <div className={cn(
-                      "rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-line",
-                      isUser
-                        ? "rounded-tr-sm bg-primary text-primary-foreground"
-                        : "rounded-tl-sm bg-white shadow-sm text-foreground"
-                    )}>
-                      {msg.text.replace(/\*\*([^*]+)\*\*/g, "$1")}
-                    </div>
-                    {msg.filledFields && msg.filledFields.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {msg.filledFields.map((f) => (
-                          <span key={f} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary capitalize">
-                            ✓ {f}
-                          </span>
-                        ))}
+          <button
+            onClick={handleSave}
+            className={cn(
+              "rounded-lg px-4 py-2 text-[13px] font-semibold transition-all",
+              saved
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-primary text-white hover:opacity-90"
+            )}
+          >
+            {saved ? "Saved ✓" : isEditing ? "Save changes" : `Create ${entityLabel}`}
+          </button>
+        </header>
+
+        {/* ── Split body ── */}
+        <div ref={containerRef} className="flex flex-1 overflow-hidden">
+
+          {/* ── LEFT: Chat ── */}
+          <div style={{ width: `${leftPct}%` }} className="flex shrink-0 flex-col border-r border-border bg-gradient-to-b from-blue-50/70 via-indigo-50/30 to-white/60">
+            <div className="shrink-0 border-b border-border/50 px-5 py-3">
+              <p className="text-[13px] font-semibold text-muted-foreground/50">Build with AI</p>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+              {messages.map((msg) => {
+                const isUser = msg.role === "user";
+
+                if (msg.type === "template-picker") {
+                  return (
+                    <div key={msg.id} className="flex items-start gap-2.5 py-1.5">
+                      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <Sparkles className="h-3 w-3" />
                       </div>
-                    )}
+                      <TemplatePickerMessage
+                        onViewAll={() => setShowCommunity(true)}
+                        onSelect={handleTemplateSelect}
+                        entityLabel={entityLabel}
+                      />
+                    </div>
+                  );
+                }
+
+                if (msg.type === "template-reasoning" && msg.templateData) {
+                  return (
+                    <div key={msg.id} className="flex items-start gap-2.5 py-1.5">
+                      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <Sparkles className="h-3 w-3" />
+                      </div>
+                      <TemplateReasoningMessage template={msg.templateData} />
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={msg.id} className={cn("flex items-start gap-2.5 py-1.5", isUser && "flex-row-reverse")}>
+                    <div className={cn(
+                      "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-bold",
+                      isUser ? "bg-foreground/8 text-foreground" : "bg-primary/10 text-primary"
+                    )}>
+                      {isUser ? "A" : <Sparkles className="h-3 w-3" />}
+                    </div>
+                    <div className={cn("max-w-[82%]", isUser && "flex flex-col items-end")}>
+                      <div className={cn(
+                        "rounded-2xl px-3.5 py-2.5 text-[15px] leading-relaxed whitespace-pre-line",
+                        isUser
+                          ? "rounded-tr-sm bg-muted/70 text-foreground"
+                          : "rounded-tl-sm bg-white shadow-sm text-foreground"
+                      )}>
+                        {msg.text.replace(/\*\*([^*]+)\*\*/g, "$1")}
+                      </div>
+                      {msg.filledFields && msg.filledFields.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {msg.filledFields.map((f) => (
+                            <span key={f} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary capitalize">
+                              ✓ {f}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-            {typing && <TypingDots />}
-            <div ref={bottomRef} />
+                );
+              })}
+              {typing && <TypingDots />}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Input */}
+            <div className="shrink-0 border-t border-border/50 p-4">
+              <div className="flex items-end gap-2 rounded-xl border border-white/80 bg-white/80 px-4 py-3 shadow-sm backdrop-blur-sm focus-within:border-primary/30 focus-within:bg-white transition-all">
+                <textarea
+                  ref={inputRef}
+                  rows={3}
+                  placeholder={`Describe your ${entityLabel.toLowerCase()}…`}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && input.trim()) { e.preventDefault(); sendMessage(); } }}
+                  className="flex-1 resize-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!input.trim() || typing}
+                  className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition-opacity disabled:opacity-30"
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Input */}
-          <div className="shrink-0 border-t border-border/50 p-4">
-            <div className="flex items-end gap-2 rounded-xl border border-white/80 bg-white/80 px-4 py-3 shadow-sm backdrop-blur-sm focus-within:border-primary/30 focus-within:bg-white transition-all">
-              <textarea
-                ref={inputRef}
-                rows={3}
-                placeholder="Describe your helper…"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && input.trim()) { e.preventDefault(); sendMessage(); } }}
-                className="flex-1 resize-none bg-transparent text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
-              />
-              <button
-                onClick={sendMessage}
-                disabled={!input.trim() || typing}
-                className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition-opacity disabled:opacity-30"
-              >
-                <ArrowUp className="h-3.5 w-3.5" />
-              </button>
+          {/* ── Drag handle ── */}
+          <div
+            onMouseDown={onDividerMouseDown}
+            className="group relative w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/30"
+          >
+            <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-[3px]">
+              {[0,1,2,3,4].map((i) => (
+                <div key={i} className="h-1 w-1 rounded-full bg-muted-foreground/25 group-hover:bg-primary/50" />
+              ))}
+            </div>
+          </div>
+
+          {/* ── RIGHT: Form ── */}
+          <div ref={rightPanelRef} className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="space-y-4">
+
+              {/* Name */}
+              <FieldWrap label="Name" highlighted={highlighted.has("name")} fieldRef={nameFieldRef}>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Resume Screener"
+                  className="w-full bg-transparent text-[17px] font-semibold text-foreground outline-none placeholder:font-normal placeholder:text-muted-foreground/40"
+                />
+              </FieldWrap>
+
+              {/* Instructions */}
+              <FieldWrap label="Instructions" highlighted={highlighted.has("description")} fieldRef={descFieldRef}>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                  placeholder="e.g. Screens incoming CVs against job criteria and ranks the top candidates."
+                  rows={3}
+                  className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40"
+                />
+              </FieldWrap>
+
+              {/* Skills */}
+              <FieldWrap label="Skills" highlighted={highlighted.has("skills")} fieldRef={skillsFieldRef}>
+                <textarea
+                  value={form.instructions}
+                  onChange={(e) => setForm((p) => ({ ...p, instructions: e.target.value }))}
+                  placeholder={"• Screen every incoming CV against the job description\n• Score each candidate out of 100\n• Flag candidates missing required skills\n• Only escalate to Sarah when the score is above 80"}
+                  rows={9}
+                  className="w-full resize-none bg-transparent font-mono text-[15px] leading-relaxed text-foreground outline-none placeholder:font-sans placeholder:text-muted-foreground/40"
+                />
+              </FieldWrap>
+
+              {/* Run Graph */}
+              <FieldWrap label="Run Graph" highlighted={false}>
+                <p className="mb-3 text-[14px] text-muted-foreground">
+                  How this {form.name ? `"${form.name}"` : entityLabel.toLowerCase()} executes — from trigger to output.
+                </p>
+                <RunGraph name={form.name || "default"} />
+              </FieldWrap>
+
+              {/* Connectors */}
+              <FieldWrap label="Connectors" highlighted={highlighted.has("connectors")} fieldRef={connFieldRef}>
+                <div className="mb-3 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                  <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                  <input
+                    type="text"
+                    placeholder="Search connectors…"
+                    value={connectorSearch}
+                    onChange={(e) => setConnectorSearch(e.target.value)}
+                    className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted-foreground/40"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {filteredConnectors.map((c) => {
+                    const active = form.connectors.has(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => toggleConnector(c.id)}
+                        className={cn(
+                          "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-[14px] font-medium transition-all",
+                          active
+                            ? "border-primary/30 bg-primary/5 text-primary"
+                            : "border-border bg-white text-foreground/70 hover:border-primary/20 hover:bg-muted/40"
+                        )}
+                      >
+                        <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[13px]", c.bg)}>
+                          {c.emoji}
+                        </span>
+                        <span className="truncate">{c.name}</span>
+                        {active && <Check className="ml-auto h-3 w-3 shrink-0 text-primary" />}
+                      </button>
+                    );
+                  })}
+                  {filteredConnectors.length === 0 && (
+                    <p className="col-span-3 py-3 text-center text-[12px] text-muted-foreground/50">No connectors match &ldquo;{connectorSearch}&rdquo;</p>
+                  )}
+                </div>
+              </FieldWrap>
+
+              {/* Tools */}
+              <FieldWrap label="Tools" highlighted={false}>
+                <div className="space-y-1.5">
+                  {TOOL_GROUPS.map((tool) => {
+                    const active = form.tools.has(tool.id);
+                    return (
+                      <button
+                        key={tool.id}
+                        onClick={() => toggleTool(tool.id)}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all",
+                          active
+                            ? "border-primary/30 bg-primary/5"
+                            : "border-border bg-white hover:border-primary/20 hover:bg-muted/30"
+                        )}
+                      >
+                        <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[14px]", tool.bg)}>
+                          {tool.emoji}
+                        </span>
+                        <span className={cn("flex-1 text-[15px] font-medium", active ? "text-primary" : "text-foreground/80")}>
+                          {tool.name}
+                        </span>
+                        <span className={cn("text-[14px] font-medium", active ? "text-primary" : "text-muted-foreground/50")}>
+                          {active ? `${tool.total} active` : `0 of ${tool.total}`}
+                        </span>
+                        <ChevronRight className={cn("h-3.5 w-3.5 shrink-0", active ? "text-primary" : "text-muted-foreground/30")} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </FieldWrap>
+
             </div>
           </div>
         </div>
-
-        {/* ── RIGHT: Form ── */}
-        <div className="flex-1 overflow-y-auto px-8 py-7">
-          <div className="mx-auto max-w-xl space-y-4">
-
-            {/* Name */}
-            <FieldWrap label="Name" highlighted={highlighted.has("name")}>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="e.g. Resume Screener"
-                className="w-full bg-transparent text-[15px] font-semibold text-foreground outline-none placeholder:font-normal placeholder:text-muted-foreground/40"
-              />
-            </FieldWrap>
-
-            {/* Description */}
-            <FieldWrap label="Description" highlighted={highlighted.has("description")}>
-              <textarea
-                value={form.description}
-                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                placeholder="e.g. Screens incoming CVs against job criteria and ranks the top candidates."
-                rows={3}
-                className="w-full resize-none bg-transparent text-[14px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40"
-              />
-            </FieldWrap>
-
-            {/* Skills */}
-            <FieldWrap label="Skills" highlighted={highlighted.has("skills")}>
-              <textarea
-                value={form.instructions}
-                onChange={(e) => setForm((p) => ({ ...p, instructions: e.target.value }))}
-                placeholder={"• Screen every incoming CV against the job description\n• Score each candidate out of 100\n• Flag candidates missing required skills\n• Only escalate to Sarah when the score is above 80"}
-                rows={9}
-                className="w-full resize-none bg-transparent font-mono text-[13px] leading-relaxed text-foreground outline-none placeholder:font-sans placeholder:text-muted-foreground/40"
-              />
-            </FieldWrap>
-
-            {/* Connectors */}
-            <FieldWrap label="Connectors" highlighted={highlighted.has("connectors")}>
-              {/* Search */}
-              <div className="mb-3 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-                <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-                <input
-                  type="text"
-                  placeholder="Search connectors…"
-                  value={connectorSearch}
-                  onChange={(e) => setConnectorSearch(e.target.value)}
-                  className="flex-1 bg-transparent text-[12px] outline-none placeholder:text-muted-foreground/40"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {filteredConnectors.map((c) => {
-                  const active = form.connectors.has(c.id);
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => toggleConnector(c.id)}
-                      className={cn(
-                        "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-[12px] font-medium transition-all",
-                        active
-                          ? "border-primary/30 bg-primary/5 text-primary"
-                          : "border-border bg-white text-foreground/70 hover:border-primary/20 hover:bg-muted/40"
-                      )}
-                    >
-                      <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[13px]", c.bg)}>
-                        {c.emoji}
-                      </span>
-                      <span className="truncate">{c.name}</span>
-                      {active && <Check className="ml-auto h-3 w-3 shrink-0 text-primary" />}
-                    </button>
-                  );
-                })}
-                {filteredConnectors.length === 0 && (
-                  <p className="col-span-3 py-3 text-center text-[12px] text-muted-foreground/50">No connectors match "{connectorSearch}"</p>
-                )}
-              </div>
-            </FieldWrap>
-
-            {/* Tools */}
-            <FieldWrap label="Tools" highlighted={false}>
-              <div className="space-y-1.5">
-                {TOOL_GROUPS.map((tool) => {
-                  const active = form.tools.has(tool.id);
-                  return (
-                    <button
-                      key={tool.id}
-                      onClick={() => toggleTool(tool.id)}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all",
-                        active
-                          ? "border-primary/30 bg-primary/5"
-                          : "border-border bg-white hover:border-primary/20 hover:bg-muted/30"
-                      )}
-                    >
-                      <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[14px]", tool.bg)}>
-                        {tool.emoji}
-                      </span>
-                      <span className={cn("flex-1 text-[13px] font-medium", active ? "text-primary" : "text-foreground/80")}>
-                        {tool.name}
-                      </span>
-                      <span className={cn(
-                        "text-[11px] font-medium",
-                        active ? "text-primary" : "text-muted-foreground/50"
-                      )}>
-                        {active ? `${tool.total} active` : `0 of ${tool.total}`}
-                      </span>
-                      <ChevronRight className={cn("h-3.5 w-3.5 shrink-0", active ? "text-primary" : "text-muted-foreground/30")} />
-                    </button>
-                  );
-                })}
-              </div>
-            </FieldWrap>
-
-          </div>
-        </div>
       </div>
-    </div>
+    </>
   );
 }
 

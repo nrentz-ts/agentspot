@@ -15,13 +15,13 @@ import {
   ChevronRight,
   Check,
   Globe,
-  UserCircle,
   Blocks,
+  BarChart2,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/lib/sidebar-context";
 import { usePersona } from "@/lib/persona-context";
-import { PERSONAS } from "@/lib/personas";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Tooltip,
@@ -29,102 +29,96 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ConnectorsDialog } from "@/components/connectors-dialog";
+import { useVariant, VARIANTS, type VariantId } from "@/lib/variant-context";
+import { FlaskConical } from "lucide-react";
 
-const NAV_ITEMS = [
-  { label: "Home",     href: "/home",    icon: Home,     enabled: true },
-  { label: "Helpers",  href: "/helpers", icon: Bot,      enabled: true },
-  { label: "Activity", href: "/activity",icon: Activity, enabled: true },
+// ─── Recent chats mock data ───────────────────────────────────────────────
+
+const RECENT_CHATS = [
+  { id: "rc1", title: "Summarize today's activity"           },
+  { id: "rc2", title: "Top candidates for Marketing Lead"    },
+  { id: "rc3", title: "Draft follow-up for Alex Chen"        },
+  { id: "rc4", title: "Analyze Q3 pipeline health"           },
+  { id: "rc5", title: "Pipeline coverage for Q1 close"       },
+  { id: "rc6", title: "Generate proposal for Acme Corp"      },
+  { id: "rc7", title: "Renewal risk — Figma account"         },
 ];
 
+function MenuRow({ icon: Icon, label, onClick, sub }: {
+  icon: React.ElementType; label: string; onClick: () => void; sub?: string;
+}) {
+  return (
+    <button onClick={onClick} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground/70 transition-colors hover:bg-muted">
+      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="flex flex-col">
+        <span>{label}</span>
+        {sub && <span className="text-[11px] text-muted-foreground/50">{sub}</span>}
+      </div>
+    </button>
+  );
+}
+
 function ProfileMenu({ onClose, onOpenConnectors }: { onClose: () => void; onOpenConnectors: () => void }) {
-  const { persona, setPersona } = usePersona();
-  const [showPersonas, setShowPersonas] = useState(false);
+  const { variant, setVariant } = useVariant();
+  const [panel, setPanel] = useState<"main" | "variants">("main");
   const router = useRouter();
 
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-xl border border-border bg-white p-1.5 shadow-lg">
-        <button
-          onClick={() => {
-            onClose();
-            onOpenConnectors();
-          }}
-          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground/70 transition-colors hover:bg-muted"
-        >
-          <Blocks className="h-4 w-4 text-muted-foreground" />
-          <span>My Connectors</span>
-        </button>
+      <div className="absolute bottom-full left-0 z-50 mb-2 w-60 rounded-xl border border-border bg-white shadow-lg overflow-hidden">
 
-        <button
-          onClick={() => {
-            router.push("/workflows");
-            onClose();
-          }}
-          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground/70 transition-colors hover:bg-muted"
-        >
-          <Workflow className="h-4 w-4 text-muted-foreground" />
-          <span>Workflows</span>
-        </button>
+        {/* ── Main panel ── */}
+        {panel === "main" && (
+          <div className="p-1.5">
+            <MenuRow icon={Blocks}       label="My Connectors"   onClick={() => { onClose(); onOpenConnectors(); }} />
+            <div className="my-1 border-t border-border" />
+            <MenuRow icon={BarChart2}    label="ThoughtSpot Home" onClick={() => { router.push("/thoughtspot"); onClose(); }} />
+            <MenuRow icon={Globe}        label="View Marketing Site" onClick={() => { router.push("/"); onClose(); }} />
+            <div className="my-1 border-t border-border" />
+            {/* Prototype variant trigger */}
+            <button
+              onClick={() => setPanel("variants")}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground/70 transition-colors hover:bg-muted"
+            >
+              <FlaskConical className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="flex flex-1 flex-col">
+                <span>Prototype version</span>
+                <span className="text-[11px] text-muted-foreground/50 line-clamp-1">{variant.label}</span>
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" />
+            </button>
+          </div>
+        )}
 
-        <div className="my-1 border-t border-border" />
-
-        <button
-          onClick={() => {
-            router.push("/");
-            onClose();
-          }}
-          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground/70 transition-colors hover:bg-muted"
-        >
-          <Globe className="h-4 w-4 text-muted-foreground" />
-          <span>View Marketing Site</span>
-        </button>
-
-        <div className="my-1 border-t border-border" />
-
-        <div
-          className="relative"
-          onMouseEnter={() => setShowPersonas(true)}
-          onMouseLeave={() => setShowPersonas(false)}
-        >
-          <button
-            onClick={() => setShowPersonas(!showPersonas)}
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground/70 transition-colors hover:bg-muted",
-              showPersonas && "bg-muted"
-            )}
-          >
-            <UserCircle className="h-4 w-4 text-muted-foreground" />
-            <div className="flex flex-1 flex-col">
-              <span>Persona</span>
-              <span className="text-[11px] text-muted-foreground/50">{persona.label}</span>
-            </div>
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" />
-          </button>
-
-          {showPersonas && (
-            <div className="absolute bottom-0 left-full -ml-1 w-48 rounded-xl border border-border bg-white p-1.5 pl-2.5 shadow-lg">
-              {PERSONAS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    setPersona(p.id);
-                    onClose();
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] transition-colors",
-                    persona.id === p.id
-                      ? "bg-primary/8 font-medium text-primary"
-                      : "text-foreground/60 hover:bg-muted"
-                  )}
-                >
-                  <span className="flex-1">{p.label}</span>
-                  {persona.id === p.id && <Check className="h-3 w-3" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* ── Prototype variant panel ── */}
+        {panel === "variants" && (
+          <div className="p-1.5">
+            <button onClick={() => setPanel("main")} className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-muted">
+              <ChevronRight className="h-3.5 w-3.5 rotate-180" />
+              <span>Back</span>
+            </button>
+            <div className="my-1 border-t border-border" />
+            <p className="px-2.5 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/50">
+              Prototype version
+            </p>
+            {(Object.values(VARIANTS) as typeof VARIANTS[VariantId][]).map((v) => (
+              <button key={v.id} onClick={() => { setVariant(v.id); onClose(); }}
+                className={cn("flex w-full flex-col rounded-lg px-2.5 py-2.5 text-left transition-colors",
+                  variant.id === v.id ? "bg-primary/8" : "hover:bg-muted"
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={cn("text-[13px] font-medium", variant.id === v.id ? "text-primary" : "text-foreground/80")}>
+                    {v.label}
+                  </span>
+                  {variant.id === v.id && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                </div>
+                <span className="text-[11px] text-muted-foreground/60">{v.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
       </div>
     </>
@@ -209,12 +203,13 @@ function CollapsedProfileButton() {
 export function Sidebar() {
   const pathname = usePathname();
   const { open, toggle } = useSidebar();
+  const { variant } = useVariant();
 
   return (
     <aside
       className={cn(
         "flex h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 ease-in-out",
-        open ? "w-[220px]" : "w-[60px]"
+        open ? "w-[260px]" : "w-[60px]"
       )}
     >
       <div
@@ -240,7 +235,7 @@ export function Sidebar() {
               <Sparkles className="h-3.5 w-3.5 text-primary-foreground" />
             </div>
             <span className="text-[15px] font-semibold tracking-tight text-sidebar-foreground">
-              SpotterWork
+              AgentSpot
             </span>
           </div>
         )}
@@ -252,22 +247,21 @@ export function Sidebar() {
           open ? "px-3" : "flex flex-col items-center px-0"
         )}
       >
-        {NAV_ITEMS.map((item) => {
+        {variant.navItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
 
           const link = (
             <Link
-              href={item.enabled ? item.href : "#"}
+              href={item.href}
               className={cn(
                 "flex items-center rounded-lg font-medium transition-all duration-150",
                 open
                   ? "gap-3 px-3 py-2.5 text-[14px]"
                   : "h-10 w-10 justify-center",
-                isActive && item.enabled
+                isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
               )}
-              onClick={(e) => !item.enabled && e.preventDefault()}
             >
               <item.icon className={cn("shrink-0", open ? "h-[18px] w-[18px]" : "h-5 w-5")} />
               {open && <span>{item.label}</span>}
@@ -288,6 +282,42 @@ export function Sidebar() {
           return <div key={item.label}>{link}</div>;
         })}
       </nav>
+
+      {/* ── Recent Chats ── */}
+      {open ? (
+        <div className="mt-6 px-3">
+          <div className="mb-2 flex items-center gap-2 px-1">
+            <MessageSquare className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/30" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/30">
+              Recent Chats
+            </span>
+          </div>
+          <div className="space-y-0.5">
+            {RECENT_CHATS.map((chat) => (
+              <Link
+                key={chat.id}
+                href={`/assistant?q=${encodeURIComponent(chat.title)}`}
+                className="group flex items-center rounded-lg px-2.5 py-1.5 transition-colors hover:bg-sidebar-accent/60"
+              >
+                <span className="truncate text-[13px] text-sidebar-foreground/60 group-hover:text-sidebar-foreground">
+                  {chat.title}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex justify-center">
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <button className="flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/40 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground">
+                <MessageSquare className="h-5 w-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>Recent Chats</TooltipContent>
+          </Tooltip>
+        </div>
+      )}
 
       <div className="flex-1" />
 

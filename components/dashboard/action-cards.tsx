@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Globe } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { usePersona } from "@/lib/persona-context";
 import { PERSONA_SKILLS } from "@/lib/persona-skills";
 
@@ -11,84 +11,69 @@ export function ActionCards() {
   const { persona } = usePersona();
   const [expanded, setExpanded] = useState(false);
   const allSkills = PERSONA_SKILLS[persona.id];
-  const firstRow = allSkills.slice(0, 4);
-  const extraSkills = allSkills.slice(4, 11);
+
+  // 2 rows visible by default, 3 more rows revealed on expand
+  const defaultSkills = allSkills.slice(0, 8);
+  const extraSkills = allSkills.slice(8, 20);
 
   function handleClick(query: string) {
     router.push(`/assistant?q=${encodeURIComponent(query)}`);
   }
 
+  const cardClass =
+    "group flex flex-col items-start rounded-2xl border border-border bg-card p-5 text-left transition-all duration-150 hover:border-primary/20 hover:shadow-lg active:scale-[0.98]";
+
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {firstRow.map((skill) => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {defaultSkills.map((skill) => (
           <button
             key={skill.label}
             onClick={() => handleClick(skill.query)}
-            className="group flex flex-col gap-3 rounded-xl border border-white/80 bg-white/60 p-4 text-left backdrop-blur-sm transition-all duration-150 hover:border-primary/20 hover:bg-white/90 hover:shadow-md active:scale-[0.98]"
+            className={cardClass}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
-              <skill.icon className="h-4 w-4" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+              <skill.icon className="h-5 w-5" />
             </div>
-            <div>
-              <p className="text-[14px] font-semibold leading-snug text-foreground">
-                {skill.label}
-              </p>
-              <p className="mt-0.5 text-[14px] leading-snug text-muted-foreground">
-                {skill.description}
-              </p>
-            </div>
+            <h3 className="mt-4 text-[14px] font-semibold text-foreground">
+              {skill.label}
+            </h3>
+            <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+              {skill.description}
+            </p>
           </button>
         ))}
       </div>
 
-      {expanded && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {expanded && extraSkills.length > 0 && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {extraSkills.map((skill) => (
             <button
               key={skill.label}
               onClick={() => handleClick(skill.query)}
-              className="group flex flex-col gap-3 rounded-xl border border-white/80 bg-white/60 p-4 text-left backdrop-blur-sm transition-all duration-150 hover:border-primary/20 hover:bg-white/90 hover:shadow-md active:scale-[0.98]"
+              className={cardClass}
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
-                <skill.icon className="h-4 w-4" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                <skill.icon className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-[14px] font-semibold leading-snug text-foreground">
-                  {skill.label}
-                </p>
-                <p className="mt-0.5 text-[14px] leading-snug text-muted-foreground">
-                  {skill.description}
-                </p>
-              </div>
+              <h3 className="mt-4 text-[14px] font-semibold text-foreground">
+                {skill.label}
+              </h3>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                {skill.description}
+              </p>
             </button>
           ))}
-          <a
-            href="#"
-            className="group flex flex-col gap-3 rounded-xl border border-dashed border-primary/30 bg-primary/[0.03] p-4 text-left backdrop-blur-sm transition-all duration-150 hover:border-primary/50 hover:bg-primary/[0.07] hover:shadow-md active:scale-[0.98]"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
-              <Globe className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-[14px] font-semibold leading-snug text-primary">
-                Community gallery
-              </p>
-              <p className="mt-0.5 text-[14px] leading-snug text-muted-foreground">
-                See what the community is building &rarr;
-              </p>
-            </div>
-          </a>
         </div>
       )}
 
-      <div className="flex justify-center">
+      <div className="flex justify-center pt-1">
         <button
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-1 text-[14px] font-medium text-primary transition-colors hover:underline"
         >
-          {expanded ? "Show less" : "Show more examples"}
-          {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          {expanded ? "Show less" : "Show more"}
+          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </button>
       </div>
     </div>

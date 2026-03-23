@@ -101,7 +101,7 @@ export function ChatContainer() {
           <Sparkles className="h-3.5 w-3.5 text-primary" />
         </div>
         <div>
-          <h1 className="text-[13px] font-semibold">SpotterWork Assistant</h1>
+          <h1 className="text-[13px] font-semibold">AgentSpot Assistant</h1>
           <p className="text-[11px] text-muted-foreground">Your personal AI work assistant</p>
         </div>
       </header>

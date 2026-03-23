@@ -9,13 +9,16 @@ import {
   Sparkles,
   Zap,
   Shield,
+  ArrowUpRight,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { usePersona } from "@/lib/persona-context";
 import { PERSONA_DASHBOARD_DATA } from "@/lib/persona-data";
 import { PERSONA_HELPERS } from "@/lib/agents-data";
 import { PERSONA_SKILLS } from "@/lib/persona-skills";
 import { getHelperDetail, toSlug } from "@/lib/helper-detail-data";
+import { useVariant } from "@/lib/variant-context";
 
 // ─── Fallbacks ────────────────────────────────────────────────────────────────
 
@@ -71,10 +74,15 @@ interface RosterItem {
 // ─── Grid card (matches tile-grid style) ─────────────────────────────────────
 
 function HelperGridCard({ item, onClick }: { item: RosterItem; onClick: () => void }) {
+  // Split "Screened 14 resumes · 8 min ago" into action + time
+  const [actionText, timeText] = item.description.includes(" · ")
+    ? item.description.split(" · ")
+    : [item.description, null];
+
   return (
     <button
       onClick={onClick}
-      className="group flex flex-col items-start rounded-2xl border border-border bg-white p-5 text-left transition-all duration-150 hover:border-primary/20 hover:shadow-lg active:scale-[0.98]"
+      className="group flex flex-col items-start rounded-2xl border border-border bg-card p-5 text-left transition-all duration-150 hover:border-primary/20 hover:shadow-lg active:scale-[0.98]"
     >
       {/* Emoji avatar */}
       <div
@@ -83,13 +91,25 @@ function HelperGridCard({ item, onClick }: { item: RosterItem; onClick: () => vo
         {item.emoji}
       </div>
 
-      {/* Name + description */}
+      {/* Name */}
       <h3 className="mt-4 text-[14px] font-semibold text-foreground">
         {item.label}
       </h3>
-      <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-        {item.description}
+
+      {/* Last action */}
+      <p className="mt-1 text-[14px] leading-snug text-muted-foreground line-clamp-2">
+        {actionText}
       </p>
+
+      {/* Time + active badge */}
+      {timeText && (
+        <div className="mt-3 flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[14px] text-muted-foreground/60">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            {timeText}
+          </span>
+        </div>
+      )}
     </button>
   );
 }
@@ -99,14 +119,15 @@ function HelperGridCard({ item, onClick }: { item: RosterItem; onClick: () => vo
 export function AgentRoster({ layout = "grid" }: { layout?: "grid" | "sidebar" }) {
   const router = useRouter();
   const { persona } = usePersona();
+  const { variant } = useVariant();
   const lookupHelper = useHelperLookup();
 
   const [onboardingSkills, setOnboardingSkills] = useState<RosterItem[]>([]);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("spotterwork_selected_skills");
-      const roleRaw = localStorage.getItem("spotterwork_role");
+      const raw = localStorage.getItem("agentspot_selected_skills");
+      const roleRaw = localStorage.getItem("agentspot_role");
       if (!raw) return;
       const selected: string[] = JSON.parse(raw);
       if (!selected.length) return;
@@ -162,7 +183,12 @@ export function AgentRoster({ layout = "grid" }: { layout?: "grid" | "sidebar" }
 
     return (
       <div className="sticky top-6 space-y-3">
-        <h2 className="text-[15px] font-semibold text-foreground">Your Active Helpers</h2>
+        <div className="flex items-center justify-between">
+        <h2 className="text-[15px] font-semibold text-foreground">Your Active {variant.agentsLabel}</h2>
+        <Link href="/helpers" className="flex items-center gap-1 text-[14px] font-medium text-primary hover:underline">
+          View all <ArrowUpRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
         <div className="flex flex-col gap-2">
           {items.map((item, idx) => {
             const style = AVATAR_STYLES[idx % AVATAR_STYLES.length];
@@ -194,13 +220,21 @@ export function AgentRoster({ layout = "grid" }: { layout?: "grid" | "sidebar" }
   // ── Grid layout ───────────────────────────────────────────────────────────
   const gridItems: RosterItem[] = (
     useOnboarding
-      ? onboardingSkills
+      ? onboardingSkills.map((item) => {
+          // Try to enrich onboarding skills with lastAction from dashboard data
+          const agentMatch = defaultAgents.find(
+            (a) => a.name.toLowerCase() === item.label.toLowerCase()
+          );
+          return agentMatch
+            ? { ...item, description: agentMatch.lastAction }
+            : item;
+        })
       : defaultAgents.map((a, idx) => {
           const detail = getHelperDetail(toSlug(a.name));
           const helperEntry = lookupHelper(a.name);
           return {
             label: a.name,
-            description: a.description ?? a.lastAction,
+            description: a.lastAction,   // show last action, not static description
             emoji: detail?.emoji ?? helperEntry?.emoji ?? FALLBACK_EMOJIS[idx % FALLBACK_EMOJIS.length],
             color: helperEntry?.color ?? FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
             Icon: AVATAR_STYLES[idx % AVATAR_STYLES.length].icon,
@@ -210,7 +244,12 @@ export function AgentRoster({ layout = "grid" }: { layout?: "grid" | "sidebar" }
 
   return (
     <div className="space-y-3">
-      <h2 className="text-[15px] font-semibold text-foreground">Your Active Helpers</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-[15px] font-semibold text-foreground">Your Active {variant.agentsLabel}</h2>
+        <Link href="/helpers" className="flex items-center gap-1 text-[14px] font-medium text-primary hover:underline">
+          View all <ArrowUpRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {gridItems.map((item) => (
           <HelperGridCard

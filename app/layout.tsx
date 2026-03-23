@@ -39,7 +39,7 @@ const neuton = Neuton({
 });
 
 export const metadata: Metadata = {
-  title: "SpotterWork — Your AI Work Assistant",
+  title: "AgentSpot — Your AI Work Assistant",
   description:
     "Automate repetitive tasks, build workflows, and get more done with your personal AI assistant.",
 };

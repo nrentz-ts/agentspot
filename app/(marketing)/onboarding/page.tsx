@@ -6,7 +6,6 @@ import {
   Sparkles,
   ArrowRight,
   ArrowLeft,
-  Check,
   Loader2,
   Users,
   Briefcase,
@@ -40,6 +39,78 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERSONA_SKILLS } from "@/lib/persona-skills";
+import { PERSONA_DASHBOARD_DATA } from "@/lib/persona-data";
+import { PERSONA_HELPERS } from "@/lib/agents-data";
+
+const FALLBACK_EMOJIS = ["🤖", "🧠", "⚡", "✨", "🎯"];
+const FALLBACK_COLORS = [
+  "bg-violet-100", "bg-sky-100", "bg-amber-100", "bg-emerald-100", "bg-rose-100",
+];
+
+/* ─── Real company logo domain map ─── */
+const TOOL_DOMAINS: Record<string, string> = {
+  bamboohr:    "bamboohr.com",
+  workday:     "workday.com",
+  greenhouse:  "greenhouse.io",
+  lever:       "lever.co",
+  adp:         "adp.com",
+  rippling:    "rippling.com",
+  lattice:     "lattice.com",
+  cultureamp:  "cultureamp.com",
+  docusign:    "docusign.com",
+  zendesk:     "zendesk.com",
+  surveymonkey:"surveymonkey.com",
+  calendly:    "calendly.com",
+  zoom:        "zoom.us",
+  gcal:        "google.com",
+  slack:       "slack.com",
+  notion:      "notion.so",
+  gdrive:      "google.com",
+  confluence:  "atlassian.com",
+  linkedin:    "linkedin.com",
+  salesforce:  "salesforce.com",
+  hubspot:     "hubspot.com",
+  outreach:    "outreach.io",
+  ganalytics:  "google.com",
+  gads:        "google.com",
+  gmail:       "gmail.com",
+  github:      "github.com",
+  jira:        "atlassian.com",
+  sentry:      "sentry.io",
+  linear:      "linear.app",
+  datadog:     "datadoghq.com",
+  quickbooks:  "quickbooks.intuit.com",
+  netsuite:    "netsuite.com",
+  expensify:   "expensify.com",
+  xero:        "xero.com",
+  concur:      "concur.com",
+};
+
+function getConnectorLogos(role: string, helperLabel: string) {
+  const tools = getToolsForHelper(role, helperLabel);
+  // Deduplicate by domain so e.g. gcal+gdrive+ganalytics don't all show google.com
+  const seen = new Set<string>();
+  return tools
+    .map((t) => ({ name: t.name, domain: TOOL_DOMAINS[t.id] }))
+    .filter((c) => {
+      if (!c.domain || seen.has(c.domain)) return false;
+      seen.add(c.domain);
+      return true;
+    })
+    .slice(0, 4);
+}
+
+function getAgentStyle(personaId: string, name: string, idx: number) {
+  const helpers = PERSONA_HELPERS[personaId];
+  const all = helpers
+    ? [...helpers.mine, ...helpers.shared, ...helpers.community]
+    : [];
+  const match = all.find((h) => h.name === name);
+  return {
+    emoji: match?.emoji ?? FALLBACK_EMOJIS[idx % FALLBACK_EMOJIS.length],
+    color: match?.color ?? FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
+  };
+}
 
 const TOTAL_STEPS = 3;
 
@@ -257,74 +328,82 @@ function StepOne({
   );
 }
 
-/* ─── Step 2: Pick ONE helper ─── */
-function StepTwo({
-  role,
-  selectedHelper,
-  setSelectedHelper,
-}: {
-  role: string;
-  selectedHelper: string;
-  setSelectedHelper: (v: string) => void;
-}) {
+/* ─── Step 2: Meet your AI team (info screen) ─── */
+function StepTwo({ role }: { role: string }) {
   const personaId = ROLE_TO_PERSONA[role] ?? "hr";
-  const skills = (PERSONA_SKILLS[personaId] ?? PERSONA_SKILLS.hr).slice(0, 6);
+  const helpers = PERSONA_HELPERS[personaId] ?? PERSONA_HELPERS.hr;
+  // Always show exactly 5: all of mine (usually 4) + top shared item(s)
+  const cards = [...helpers.mine, ...helpers.shared].slice(0, 5);
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {skills.map((skill) => {
-        const selected = selectedHelper === skill.label;
-        const Icon = skill.icon;
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {cards.map((agent, i) => {
+        const tools = getToolsForHelper(role, agent.name).slice(0, 4);
+
         return (
-          <button
-            key={skill.label}
-            onClick={() => setSelectedHelper(skill.label)}
+          <div
+            key={agent.id}
             className={cn(
-              "relative flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150",
-              selected
-                ? "border-primary bg-primary/5 shadow-sm"
-                : "border-border bg-white hover:border-primary/30 hover:bg-primary/[0.03]"
+              "flex flex-col items-start rounded-2xl border border-border bg-card p-5",
+              i === 4 && "sm:col-span-2 lg:col-span-1"
             )}
           >
-            <div
-              className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
-                selected ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4" />
+            {/* Emoji avatar */}
+            <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl text-xl", agent.color)}>
+              {agent.emoji}
             </div>
-            <div className="min-w-0 flex-1 pr-5">
-              <p className={cn("text-[13px] font-semibold leading-snug", selected ? "text-primary" : "text-foreground")}>
-                {skill.label}
-              </p>
-              <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{skill.description}</p>
-            </div>
-            {selected && (
-              <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-                <Check className="h-3 w-3 text-white" />
-              </span>
+
+            {/* Name */}
+            <h3 className="mt-4 text-[14px] font-semibold text-foreground">{agent.name}</h3>
+
+            {/* Description */}
+            <p className="mt-1 text-[13px] leading-snug text-muted-foreground line-clamp-2">
+              {agent.description}
+            </p>
+
+            {/* Tool icons — same tools shown on step 3 */}
+            {tools.length > 0 && (
+              <div className="mt-auto pt-4 flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground/50">Works with</span>
+                <div className="flex items-center gap-1">
+                  {tools.map((t) => {
+                    const Icon = t.icon;
+                    return (
+                      <span
+                        key={t.id}
+                        title={t.name}
+                        className={cn(
+                          "flex h-5 w-5 items-center justify-center rounded-full",
+                          t.bg
+                        )}
+                      >
+                        <Icon className={cn("h-3 w-3", t.color)} />
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
             )}
-          </button>
+          </div>
         );
       })}
     </div>
   );
 }
 
-/* ─── Step 3: Connect tools ─── */
+/* ─── Step 3: Connect your tools ─── */
 function StepThree({
   role,
-  selectedHelper,
   connected,
   setConnected,
 }: {
   role: string;
-  selectedHelper: string;
   connected: Set<string>;
   setConnected: (v: Set<string>) => void;
 }) {
-  const integrations = getToolsForHelper(role, selectedHelper);
+  const personaId = ROLE_TO_PERSONA[role] ?? "hr";
+  const toolIds = ROLE_TOOLS[personaId] ?? ["slack", "gcal", "gmail", "gdrive", "notion"];
+  const tools = toolIds.map((id) => TOOLS[id]).filter(Boolean);
 
   function toggle(id: string) {
     const next = new Set(connected);
@@ -334,48 +413,38 @@ function StepThree({
   }
 
   return (
-    <div className="space-y-4">
-      {selectedHelper && (
-        <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
-          <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <p className="text-[13px] text-primary/80">
-            Showing tools that work best with{" "}
-            <span className="font-semibold text-primary">{selectedHelper}</span>
-          </p>
-        </div>
-      )}
-
-      <div className="grid gap-2.5 sm:grid-cols-2">
-        {integrations.map((app) => {
-          const isOn = connected.has(app.id);
-          const Icon = app.icon;
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {tools.map((t) => {
+          const Icon = t.icon;
+          const active = connected.has(t.id);
           return (
             <button
-              key={app.id}
-              onClick={() => toggle(app.id)}
+              key={t.id}
+              onClick={() => toggle(t.id)}
               className={cn(
-                "flex items-center gap-3 rounded-xl border p-3.5 text-left transition-all duration-150",
-                isOn
-                  ? `${app.border} ${app.selectedBg} shadow-sm`
-                  : "border-border bg-white hover:border-primary/20 hover:bg-muted/30"
+                "flex items-center gap-3 rounded-xl border p-4 text-left transition-all",
+                active
+                  ? "bg-sky-50 border-sky-200 ring-1 ring-inset ring-sky-200"
+                  : "border-border bg-card hover:border-primary/30 hover:bg-primary/5"
               )}
             >
-              <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", isOn ? app.bg : "bg-muted")}>
-                <Icon className={cn("h-4 w-4", isOn ? app.color : "text-muted-foreground")} />
+              <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", t.bg)}>
+                <Icon className={cn("h-4 w-4", t.color)} />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className={cn("text-[13px] font-semibold", isOn ? "text-foreground" : "text-foreground/70")}>
-                  {app.name}
-                </p>
-                <p className="text-[11px] text-muted-foreground leading-snug">{app.description}</p>
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <span className="text-[13px] font-semibold text-foreground">{t.name}</span>
+                <span className="truncate text-[12px] text-muted-foreground">{t.description}</span>
               </div>
-              <div
-                className={cn(
-                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all",
-                  isOn ? "border-primary bg-primary" : "border-border bg-white"
+              <div className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                active ? "border-primary bg-primary" : "border-border bg-white"
+              )}>
+                {active && (
+                  <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 10 8">
+                    <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 )}
-              >
-                {isOn && <Check className="h-3 w-3 text-white" />}
               </div>
             </button>
           );
@@ -393,9 +462,9 @@ function BuildingOverlay({ helperName }: { helperName: string }) {
         <Sparkles className="h-7 w-7 text-white" />
       </div>
       <div className="space-y-1.5 text-center">
-        <p className="text-[18px] font-bold tracking-tight text-foreground">Building your helper…</p>
+        <p className="text-[18px] font-bold tracking-tight text-foreground">Preparing your workspace…</p>
         <p className="text-[13px] text-muted-foreground">
-          Setting up <span className="font-medium text-foreground">{helperName || "your first helper"}</span>
+          Setting up your agents, workflows, and integrations
         </p>
       </div>
       <Loader2 className="h-5 w-5 animate-spin text-primary/50" />
@@ -410,19 +479,17 @@ export default function OnboardingPage() {
   const [building, setBuilding] = useState(false);
 
   const [role, setRole] = useState("");
-  const [selectedHelper, setSelectedHelper] = useState("");
-  const [connected, setConnected] = useState<Set<string>>(new Set());
+  const [connected, setConnected] = useState<Set<string>>(new Set(["slack", "gcal", "gmail"]));
 
   function handleNext() {
     if (step < TOTAL_STEPS) {
       setStep(step + 1);
     } else {
       try {
-        localStorage.setItem("spotterwork_first_helper", selectedHelper);
-        localStorage.setItem("spotterwork_role", role);
-        if (selectedHelper) {
-          localStorage.setItem("spotterwork_selected_skills", JSON.stringify([selectedHelper]));
-        }
+        const personaId = ROLE_TO_PERSONA[role] ?? "hr";
+        const skills = (PERSONA_SKILLS[personaId] ?? PERSONA_SKILLS.hr).slice(0, 5);
+        localStorage.setItem("agentspot_role", role);
+        localStorage.setItem("agentspot_selected_skills", JSON.stringify(skills.map((s) => s.label)));
       } catch { /* ignore */ }
       setBuilding(true);
       setTimeout(() => router.push("/home"), 2200);
@@ -439,22 +506,22 @@ export default function OnboardingPage() {
 
   const titles: Record<number, { heading: string; sub: string }> = {
     1: {
-      heading: "What best describes your role?",
-      sub: "SpotterWork tailors your experience based on how you work.",
+      heading: "What best describes your work area?",
+      sub: "AgentSpot tailors your experience based on how you work.",
     },
     2: {
-      heading: "What do you want to build first?",
-      sub: "Pick one area — your helper will be ready the moment you land.",
+      heading: "Meet your AI team",
+      sub: "These agents will be ready and working the moment you land.",
     },
     3: {
       heading: "Connect your tools",
-      sub: "Give your helper the context it needs. Skip anything you'd like.",
+      sub: "Give your agents the context they need to get to work.",
     },
   };
 
-  const canAdvance = step === 1 ? !!role : step === 2 ? !!selectedHelper : true;
+  const canAdvance = step === 1 ? !!role : true;
 
-  if (building) return <BuildingOverlay helperName={selectedHelper} />;
+  if (building) return <BuildingOverlay helperName="" />;
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -464,7 +531,7 @@ export default function OnboardingPage() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Sparkles className="h-4 w-4 text-white" />
           </div>
-          <span className="text-[15px] font-semibold tracking-tight">SpotterWork</span>
+          <span className="text-[15px] font-semibold tracking-tight">AgentSpot</span>
         </div>
         <button
           onClick={handleSkip}
@@ -479,7 +546,7 @@ export default function OnboardingPage() {
       <div
         className={cn(
           "mx-auto w-full px-6 pt-[10vh]",
-          step === 2 ? "max-w-3xl" : step === 3 ? "max-w-xl" : "max-w-md"
+          step === 2 ? "max-w-4xl" : step === 3 ? "max-w-2xl" : "max-w-lg"
         )}
       >
         <div className="space-y-1">
@@ -492,15 +559,10 @@ export default function OnboardingPage() {
             <StepOne role={role} setRole={setRole} />
           )}
           {step === 2 && (
-            <StepTwo role={role} selectedHelper={selectedHelper} setSelectedHelper={setSelectedHelper} />
+            <StepTwo role={role} />
           )}
           {step === 3 && (
-            <StepThree
-              role={role}
-              selectedHelper={selectedHelper}
-              connected={connected}
-              setConnected={setConnected}
-            />
+            <StepThree role={role} connected={connected} setConnected={setConnected} />
           )}
         </div>
 
@@ -518,7 +580,7 @@ export default function OnboardingPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {step === 3 && (
+            {step === TOTAL_STEPS && (
               <button
                 onClick={handleSkip}
                 className="text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -536,7 +598,7 @@ export default function OnboardingPage() {
                   : "cursor-not-allowed bg-muted text-muted-foreground"
               )}
             >
-              {step === TOTAL_STEPS ? "Build my Helper" : "Next"}
+              {step === TOTAL_STEPS ? "Let's get started" : "Next"}
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>

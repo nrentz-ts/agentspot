@@ -140,7 +140,7 @@ export function ConnectorsDialog({ onClose }: { onClose: () => void }) {
                 Connectors
               </h2>
               <p className="mt-0.5 text-[13px] text-muted-foreground">
-                Connect SpotterWork to your apps, files, and services.
+                Connect AgentSpot to your apps, files, and services.
               </p>
             </div>
             <button
