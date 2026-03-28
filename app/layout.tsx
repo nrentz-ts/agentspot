@@ -4,6 +4,7 @@ import { Inter, Roboto, Open_Sans, Neuton } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PersonaProvider } from "@/lib/persona-context";
 import { FontProvider } from "@/lib/font-context";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -61,6 +62,7 @@ export default function RootLayout({
             </FontProvider>
           </PersonaProvider>
         </TooltipProvider>
+        <Analytics />
       </body>
     </html>
   );
